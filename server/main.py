@@ -16,7 +16,7 @@ from models import CitationRequest, CitationResponse, Citation
 from database import log_search
 from logging_config import setup_logging
 from utils import load_file_content
-from citation_service import generate_citations, check_relevance
+from citation_service import generate_citations, check_relevance, validate_biomedical_text
 from search_service import build_google_search_url, process_search_result
 
 load_dotenv()
@@ -63,7 +63,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def find_citations_for_passage(request: CitationRequest, background_tasks: BackgroundTasks, fastapi_request: Request):
     request_id = str(uuid.uuid4())
     start_time = time.time()
-    logger.info(f"Received citation request for text: {request.text[:50]}...", extra={"request_id": request_id})
+    logger.info(f"Received citation request for text: {request.text[:500]}...", extra={"request_id": request_id})
+
+    is_biomedical, reasoning = await validate_biomedical_text(request.text, request_id)
+    if not is_biomedical:
+        logger.warning(f"Text is not biomedical-related: {reasoning}", extra={"request_id": request_id})
+        raise HTTPException(status_code=400, detail="The provided text is not related to biomedical science. Please refine your search.")
+
     guide_content = load_file_content(OU_HARVARD_CTR_GUIDE_PATH)
     
     try:

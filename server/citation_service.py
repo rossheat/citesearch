@@ -11,6 +11,34 @@ logger = logging.getLogger("citation_app")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
+async def validate_biomedical_text(text: str, request_id: str) -> bool:
+    logger.info("Validating if text is biomedical-related using GPT-4o", extra={"request_id": request_id})
+    prompt = f"""
+    Analyse the following text and determine if it is strongly related to biomedical science. 
+
+    Text to analyse:
+    {text}
+
+    Return your response in the following JSON format:
+    {{
+        "is_biomedical": <boolean - indicates whether the text is strongly related to biomedical science>,
+        "reasoning": <string - brief explanation of why the text is or is not considered biomedical>
+    }}
+    """
+
+    try:
+        chat_completion = await openai_client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="gpt-4o",
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(chat_completion.choices[0].message.content)
+        logger.debug(f"GPT-4o biomedical validation result: {result}", extra={"request_id": request_id})
+        return result["is_biomedical"], result["reasoning"]
+    except Exception as e:
+        logger.error(f"Error in GPT-4o biomedical validation: {str(e)}", extra={"request_id": request_id})
+        return False, str(e)
+
 async def generate_citations(article_metadata: str, guide_content: str, request_id: str) -> dict:
     logger.info("Generating citations using GPT-4o", extra={"request_id": request_id})
     prompt = f"""
